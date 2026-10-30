@@ -1,4 +1,4 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -111,7 +111,7 @@
                 });
         }
 
-         Html5Qrcode.getCameras().then(devices => {
+        Html5Qrcode.getCameras().then(devices => {
             if (devices && devices.length > 0) {
                 devices.forEach((device, index) => {
                     const option = document.createElement('option');
@@ -120,6 +120,7 @@
                     cameraSelect.appendChild(option);
                 });
 
+                // 修正此處的斷行語法錯誤
                 const defaultIndex = devices.length - 1;
                 cameraSelect.selectedIndex = defaultIndex;
 
