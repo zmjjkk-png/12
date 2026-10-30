@@ -1,81 +1,118 @@
-!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>設備掃描借用系統</title>
+    <title>設備掃描借還系統</title>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         body { font-family: sans-serif; text-align: center; padding: 20px; background-color: #f8f9fa; }
         #reader { width: 100%; max-width: 450px; margin: 0 auto; background: black; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow: hidden; }
-        #result { margin-top: 25px; font-size: 18px; font-weight: bold; color: #333; white-space: pre-wrap; line-height: 1.5; min-height: 60px; }
-        /* 新增選單的樣式 */
-        #camera-select { margin-bottom: 15px; padding: 8px; font-size: 16px; border-radius: 5px; width: 100%; max-width: 300px; }
+        #result { margin-top: 20px; font-size: 18px; font-weight: bold; color: #333; white-space: pre-wrap; line-height: 1.5; min-height: 60px; }
+        .control-group { margin-bottom: 15px; }
+        select, .mode-btn { padding: 10px; font-size: 16px; border-radius: 5px; width: 100%; max-width: 300px; box-sizing: border-box; }
+        
+        /* 模式切換按鈕樣式 */
+        #mode-toggle {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+            margin-bottom: 10px;
+        }
+        #mode-toggle.return-mode {
+            background-color: #28a745; /* 歸還模式時顯示綠色 */
+        }
     </style>
 </head>
 <body>
-    <h2>📷 設備掃描借用系統</h2>
+    <h2>📷 設備掃描借還系統</h2>
     
-    <!-- 新增：手動選擇鏡頭的下拉選單 -->
-    <select id="camera-select"></select>
+    <!-- 模式切換按鈕 -->
+    <div class="control-group">
+        <button id="mode-toggle" class="mode-btn" onclick="toggleMode()">目前模式：借用設備</button>
+    </div>
+
+    <!-- 鏡頭選擇下拉選單 -->
+    <div class="control-group">
+        <select id="camera-select"></select>
+    </div>
     
     <div id="reader"></div>
     <div id="result">相機啟動中，請稍候...</div>
 
-
     <script>
         // ★★★ 請替換成您的 GAS 網頁應用程式網址 ★★★
-        const API_URL = "https://script.google.com/macros/s/AKfycbzaJn__bGmXlgXAMGzCgamXh5cDJRB3sZdfFdk4ESSfLF0wf_E2WJv1OR6X2RI7DYra/exec"; 
-
+        const API_URL = "https://script.google.com/macros/s/AKfycbyH418rMg_5uIhg-sjVoqFZfLY-CFGK1RSs8-IbC_z8SlhotkJz0U7W7wKwOVI_vruf/exec"; 
 
         let isProcessing = false; 
+        let currentMode = "borrow"; // 預設為 borrow (借用)
         const html5QrCode = new Html5Qrcode("reader");
         const config = { fps: 10, qrbox: { width: 250, height: 250 } };
         const cameraSelect = document.getElementById('camera-select');
+        const resultDiv = document.getElementById('result');
+        const modeToggleBtn = document.getElementById('mode-toggle');
 
+        // 切換模式函數
+        function toggleMode() {
+            if (currentMode === "borrow") {
+                currentMode = "return";
+                modeToggleBtn.innerText = "目前模式：歸還設備";
+                modeToggleBtn.classList.add("return-mode");
+            } else {
+                currentMode = "borrow";
+                modeToggleBtn.innerText = "目前模式：借用設備";
+                modeToggleBtn.classList.remove("return-mode");
+            }
+        }
 
-        function onScanSuccess(decodedText) {
+        // 掃描成功回呼函數
+        async function onScanSuccess(decodedText) {
             if (isProcessing) return; 
             isProcessing = true;
             
-            if (decodedText.includes("text=")) {
-                decodedText = decodedText.split("text=")[1].split("&")[0];
+            let cleanId = decodedText;
+            if (cleanId.includes("text=")) {
+                cleanId = cleanId.split("text=")[1].split("&")[0];
             }
+            cleanId = decodeURIComponent(cleanId);
             
-            const resultDiv = document.getElementById('result');
             resultDiv.style.color = "#0056b3";
-            resultDiv.innerText = `讀取到編號：${decodedText}\n連線中...`;
+            resultDiv.innerText = `讀取到編號：${cleanId}\n處理中 (${currentMode === 'borrow' ? '借用' : '歸還'})...`;
             
-            fetch(API_URL + "?id=" + decodedText)
-                .then(response => response.text())
-                .then(text => {
-                    resultDiv.style.color = text.includes("成功") ? "green" : "red";
-                    resultDiv.innerText = text;
-                    setTimeout(() => { 
-                        isProcessing = false; 
-                        resultDiv.style.color = "#333";
-                        resultDiv.innerText = "請對準下一個 QR Code 進行掃描...";
-                    }, 3500); 
-                })
-                .catch(error => {
-                    resultDiv.style.color = "red";
-                    resultDiv.innerText = "系統連線錯誤！";
-                    setTimeout(() => { isProcessing = false; }, 3500);
+            try {
+                // 將 id 與 mode 參數一起傳給 GAS
+                const response = await fetch(`${API_URL}?id=${encodeURIComponent(cleanId)}&mode=${currentMode}`);
+                const text = await response.text();
+                
+                resultDiv.style.color = text.includes("成功") ? "green" : "red";
+                resultDiv.innerText = text;
+            } catch (error) {
+                console.error("API 連線失敗:", error);
+                resultDiv.style.color = "red";
+                resultDiv.innerText = "系統連線錯誤！請檢查網路狀態。";
+            } finally {
+                setTimeout(() => { 
+                    isProcessing = false; 
+                    resultDiv.style.color = "#333";
+                    resultDiv.innerText = "請對準下一個 QR Code 進行掃描...";
+                }, 3500); 
+            }
+        }
+
+        function startCamera(cameraId) {
+            html5QrCode.start(cameraId, config, onScanSuccess)
+                .then(() => { resultDiv.innerText = "請對準 QR Code 進行掃描..."; })
+                .catch(err => { 
+                    console.error("鏡頭啟動失敗", err);
+                    resultDiv.innerText = "無法啟動選擇的鏡頭。";
                 });
         }
 
-
-        // 啟動指定鏡頭的函數
-        function startCamera(cameraId) {
-            html5QrCode.start(cameraId, config, onScanSuccess)
-                .then(() => { document.getElementById('result').innerText = "請對準 QR Code 進行掃描..."; })
-                .catch(err => { console.error(err); });
-        }
-
-
-        // 抓取設備上所有鏡頭並放入下拉選單
-        Html5Qrcode.getCameras().then(devices => {
-            if (devices && devices.length) {
+         Html5Qrcode.getCameras().then(devices => {
+            if (devices && devices.length > 0) {
                 devices.forEach((device, index) => {
                     const option = document.createElement('option');
                     option.value = device.id;
@@ -83,25 +120,28 @@
                     cameraSelect.appendChild(option);
                 });
 
+                const defaultIndex = devices.length - 1;
+                cameraSelect.selectedIndex = defaultIndex;
 
-                // 預設啟動選單裡的第一個鏡頭
                 startCamera(cameraSelect.value);
 
-
-                // 當使用者切換選單時，停止目前鏡頭並啟動新鏡頭
                 cameraSelect.addEventListener('change', () => {
+                    isProcessing = true; 
                     html5QrCode.stop().then(() => {
+                        isProcessing = false;
                         startCamera(cameraSelect.value);
                     }).catch(err => {
                         console.error("停止鏡頭失敗", err);
+                        isProcessing = false;
                     });
                 });
+            } else {
+                resultDiv.innerText = "找不到可用的鏡頭設備。";
             }
         }).catch(err => {
-            document.getElementById('result').innerText = "無法取得相機清單，請確認權限。";
+            console.error("無相機存取權限", err);
+            resultDiv.innerText = "無法取得相機清單，請確認瀏覽器相機權限。";
         });
     </script>
 </body>
 </html>
-
-
